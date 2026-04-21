@@ -178,15 +178,53 @@ void saveVoterUID(byte *uid) {
 }
 
 void handleVoter() {
-  lcd.clear(); lcd.print("BAM NUT (A/B/C)");
-  bool voted = false;
-  unsigned long waitTime = millis();
-  while (millis() - waitTime < 10000 && !voted) {
-    if (digitalRead(BTN_1) == LOW) { recordVote(0, "PHUONG AN A"); saveVoterUID(mfrc522.uid.uidByte); voted = true; }
-    else if (digitalRead(BTN_2) == LOW) { recordVote(1, "PHUONG AN B"); saveVoterUID(mfrc522.uid.uidByte); voted = true; }
-    else if (digitalRead(BTN_3) == LOW) { recordVote(2, "PHUONG AN C"); saveVoterUID(mfrc522.uid.uidByte); voted = true; }
+  bool finalConfirmed = false;
+
+  while (!finalConfirmed) {
+    lcd.clear();
+    lcd.print("MOI CHON (A/B/C)");
+    
+    int firstChoice = -1;
+    String candidateName = "";
+
+    // Bước 1: Đợi cử tri chọn lần đầu (Không giới hạn thời gian)
+    while (firstChoice == -1) {
+      if (digitalRead(BTN_1) == LOW) { firstChoice = BTN_1; candidateName = "A"; }
+      else if (digitalRead(BTN_2) == LOW) { firstChoice = BTN_2; candidateName = "B"; }
+      else if (digitalRead(BTN_3) == LOW) { firstChoice = BTN_3; candidateName = "C"; }
+    }
+    
+    digitalWrite(BUZZER, HIGH); delay(100); digitalWrite(BUZZER, LOW);
+    delay(500); // Chống dội phím (Debounce)
+
+    // Bước 2: Hiển thị màn hình xác nhận
+    lcd.clear();
+    lcd.print("XN BAU CHO "); lcd.print(candidateName); lcd.print("?");
+    lcd.setCursor(0, 1);
+    lcd.print(candidateName); lcd.print(":OK - KHAC:HUY");
+
+    // Bước 3: Đợi xác nhận hoặc hủy
+    bool actionTaken = false;
+    while (!actionTaken) {
+      // Nếu nhấn lại đúng nút vừa chọn -> XÁC NHẬN
+      if (digitalRead(firstChoice) == LOW) {
+        int addr = (firstChoice == BTN_1) ? 0 : (firstChoice == BTN_2 ? 1 : 2);
+        recordVote(addr, "PHUONG AN " + candidateName);
+        saveVoterUID(mfrc522.uid.uidByte);
+        finalConfirmed = true;
+        actionTaken = true;
+      } 
+      // Nếu nhấn bất kỳ nút nào khác (trong số các nút bầu cử) -> HỦY
+      else if ((digitalRead(BTN_1) == LOW || digitalRead(BTN_2) == LOW || digitalRead(BTN_3) == LOW || 
+                digitalRead(BTN_ADMIN_VIEW) == LOW || digitalRead(BTN_ADMIN_RESET) == LOW)) {
+        lcd.clear();
+        lcd.print("DA HUY CHON!");
+        digitalWrite(BUZZER, HIGH); delay(100); digitalWrite(BUZZER, LOW);
+        delay(1500);
+        actionTaken = true; // Thoát vòng lặp chờ xác nhận, quay lại màn hình chọn A/B/C
+      }
+    }
   }
-  if (!voted) { lcd.clear(); lcd.print("HET THOI GIAN!"); delay(2000); }
 }
 
 void recordVote(int addr, String name) {
